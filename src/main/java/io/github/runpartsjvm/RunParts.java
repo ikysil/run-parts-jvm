@@ -21,8 +21,8 @@ import static java.lang.System.out;
 @TopCommand
 @CommandLine.Command(
     name = "run-parts",
-    showEndOfOptionsDelimiterInUsageHelp = true,
-    resourceBundle = "run-parts-i18n"
+    resourceBundle = "run-parts-i18n",
+    showEndOfOptionsDelimiterInUsageHelp = true
 )
 public class RunParts implements Callable<Integer> {
 
@@ -53,10 +53,10 @@ public class RunParts implements Callable<Integer> {
     @CommandLine.Option(names = {"--regex"}, arity = "1..1")
     Pattern regex;
 
-    @CommandLine.Option(names = {"-a", "--arg"}, arity = "1..*")
+    @CommandLine.Option(names = {"-a", "--arg"}, arity = "1..1")
     List<String> args = new ArrayList<>();
 
-    @CommandLine.Option(names = {"-h", "--help"})
+    @CommandLine.Option(names = {"-h", "--help"}, usageHelp = true)
     boolean help;
 
     @CommandLine.Parameters(paramLabel = "DIRECTORY", arity = "1..1")
