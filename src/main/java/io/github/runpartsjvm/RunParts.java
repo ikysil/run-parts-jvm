@@ -67,9 +67,10 @@ public class RunParts implements Callable<Integer> {
     final ExecutorService executorService = Executors.newFixedThreadPool(5);
 
     @Override
-    public Integer call() throws Exception {
+    public Integer call() {
         if ((dir == null) || !dir.isDirectory() || !dir.canRead()) {
             err.printf("Not a directory: %s%n", dir);
+            new CommandLine(this).usage(err);
             return CommandLine.ExitCode.USAGE;
         }
         final File[] files = getFiles();
