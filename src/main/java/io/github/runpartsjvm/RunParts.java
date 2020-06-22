@@ -19,7 +19,11 @@ import static java.lang.System.err;
 import static java.lang.System.out;
 
 @TopCommand
-@CommandLine.Command(name = "run-parts", showEndOfOptionsDelimiterInUsageHelp = true)
+@CommandLine.Command(
+    name = "run-parts",
+    showEndOfOptionsDelimiterInUsageHelp = true,
+    resourceBundle = "run-parts-i18n"
+)
 public class RunParts implements Callable<Integer> {
 
     @CommandLine.Option(names = {"--test"})
