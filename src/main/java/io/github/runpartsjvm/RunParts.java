@@ -4,69 +4,120 @@ import io.quarkus.picocli.runtime.annotations.TopCommand;
 import picocli.CommandLine;
 
 import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
+
+import static java.lang.System.err;
+import static java.lang.System.out;
 
 @TopCommand
 @CommandLine.Command(name = "run-parts", showEndOfOptionsDelimiterInUsageHelp = true)
 public class RunParts implements Callable<Integer> {
 
     @CommandLine.Option(names = {"--test"})
-    private boolean test;
+    boolean test;
 
     @CommandLine.Option(names = {"--list"})
-    private boolean list;
+    boolean list;
 
     @CommandLine.Option(names = {"-v", "--verbose"})
-    private boolean verbose;
+    boolean verbose;
 
     @CommandLine.Option(names = {"--report"})
-    private boolean report;
+    boolean report;
 
     @CommandLine.Option(names = {"--reverse"})
-    private boolean reverse;
+    boolean reverse;
 
     @CommandLine.Option(names = {"--exit-on-error"})
-    private boolean exitOnError;
+    boolean exitOnError;
 
     @CommandLine.Option(names = {"--umask"}, defaultValue = "022")
-    private int umask;
+    int umask;
 
     @CommandLine.Option(names = {"--lsbsysinit"})
-    private boolean lsbSysInit;
+    boolean lsbSysInit;
 
     @CommandLine.Option(names = {"--regex"}, arity = "1..1")
-    private Pattern regex;
+    Pattern regex;
 
     @CommandLine.Option(names = {"-a", "--arg"}, arity = "1..*")
-    private String[] args;
+    List<String> args = new ArrayList<>();
 
     @CommandLine.Option(names = {"-h", "--help"})
-    private boolean help;
+    boolean help;
 
     @CommandLine.Parameters(paramLabel = "DIRECTORY", arity = "1..1")
-    private File dir;
+    File dir;
 
-    @SuppressWarnings("java:S106")
-    private void usage(String fmt, Object... o) {
-        System.err.printf(fmt, o);
-    }
+    int exitCode = CommandLine.ExitCode.OK;
+
+    final ExecutorService executorService = Executors.newFixedThreadPool(5);
 
     @Override
     public Integer call() throws Exception {
         if ((dir == null) || !dir.isDirectory() || !dir.canRead()) {
-            usage("Not a directory: %s\n", dir);
+            err.printf("Not a directory: %s%n", dir);
             return CommandLine.ExitCode.USAGE;
         }
         final File[] files = getFiles();
         Arrays.stream(files)
             .filter(this::filter)
-            .forEach(System.out::println);
-        return CommandLine.ExitCode.OK;
+            .forEach(this::process);
+        return exitCode;
+    }
+
+    private void process(File f) {
+        if (exitOnError && (exitCode != CommandLine.ExitCode.OK)) {
+            // shortcut execution of the remaining scripts
+            return;
+        }
+        exitCode = CommandLine.ExitCode.OK;
+        if (list) {
+            out.printf("%s %s%n", f, String.join(" ", args));
+            return;
+        }
+        if (!f.canExecute()) {
+            return;
+        }
+        if (test) {
+            out.printf("%s %s%n", f, String.join(" ", args));
+            return;
+        }
+        // TODO - implement random sleep
+        if (verbose) {
+            err.printf("%s %s%n", f, String.join(" ", args));
+        }
+        // TODO - implement umask
+        try {
+            exitCode = exec(f);
+            if (verbose) {
+                err.printf("%s %s exit status %s%n", f, String.join(" ", args), exitCode);
+            }
+        } catch (Exception e) {
+            exitCode = 255;
+        }
+    }
+
+    private int exec(File f) throws InterruptedException, IOException {
+        final String fPath = f.toString();
+        final OutputReport outputReport = new OutputReport(fPath, report, verbose);
+        final ProcessBuilder processBuilder = new ProcessBuilder().command(fPath);
+        processBuilder.command().addAll(args);
+        final Process process = processBuilder.start();
+        final StreamPump outStreamPump = new StreamPump(process.getInputStream(), out::println, outputReport::getOutReport);
+        final StreamPump errStreamPump = new StreamPump(process.getErrorStream(), err::println, outputReport::getErrReport);
+        executorService.submit(outStreamPump);
+        executorService.submit(errStreamPump);
+        return process.waitFor();
     }
 
     private File[] getFiles() {
@@ -99,7 +150,7 @@ public class RunParts implements Callable<Integer> {
     );
 
     private boolean filter(File f) {
-        if (f.isDirectory() || !f.canExecute()) {
+        if (f.isDirectory()) {
             return false;
         }
         final String fName = f.getName();
