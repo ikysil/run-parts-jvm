@@ -1,0 +1,3 @@
+[submodule "src/test/run-parts-test-suite"]
+	path = src/test/run-parts-test-suite
+	url = https://github.com/ikysil/run-parts-test-suite
